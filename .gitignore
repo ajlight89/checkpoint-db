@@ -1,0 +1,23 @@
+# Virtual environment
+.venv/
+
+# Python bytecode and tool caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Packaging and build output
+build/
+dist/
+*.egg-info/
+
+# SQLite databases and their WAL side files
+*.db
+*.db-wal
+*.db-shm
+
+# Editor and OS files
+.vscode/
+Thumbs.db
+desktop.ini
