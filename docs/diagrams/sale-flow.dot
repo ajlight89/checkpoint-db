@@ -1,0 +1,36 @@
+// How a sale is recorded and how the database keeps stock in step.
+// Shaded steps run in the application (Python); white steps run in the database (SQLite).
+// Render: dot -Tsvg sale-flow.dot -o sale-flow.svg
+//         dot -Tpng -Gdpi=300 sale-flow.dot -o sale-flow.png
+digraph sale_flow {
+    graph [rankdir=TB, nodesep=0.6, ranksep=0.35, pad=0.3, fontname="Helvetica",
+           bgcolor="white"];
+    node  [shape=box, style="rounded,filled", fillcolor="white", fontname="Helvetica",
+           fontsize=11, margin="0.18,0.08", width=3.2];
+    edge  [fontname="Helvetica", fontsize=10, color="#333333", arrowsize=0.8];
+
+    start    [label="Clerk enters the items, the payment\nmethod, and the member's phone (if any)",
+              fillcolor="#e8e8e8"];
+    discount [label="Python: if the member is active,\n10% off each line (whole cents)",
+              fillcolor="#e8e8e8"];
+    begin    [label="Python: BEGIN transaction", fillcolor="#e8e8e8"];
+    ins_sale [label="SQLite: INSERT INTO sale\n(date and time, member, payment method)"];
+    ins_line [label="SQLite: INSERT INTO sale_line\n(product, condition, quantity, unit price,\ndiscount); keys and CHECKs must pass"];
+    trigger  [label="SQLite trigger after the insert:\nqty_on_hand = qty_on_hand − quantity"];
+    stock    [label="CHECK\nqty_on_hand ≥ 0?", shape=diamond, style="filled", width=2.2,
+              margin="0.05,0.05"];
+    more     [label="Python: another line?", shape=diamond, style="filled",
+              fillcolor="#e8e8e8", width=2.6, margin="0.05,0.05"];
+    commit   [label="Python: COMMIT\nsale, lines, and stock changes\nare saved together", fillcolor="#e8e8e8"];
+    rollback [label="Python: ROLLBACK\nnothing is saved: no sale,\nno lines, no stock change",
+              fillcolor="#e8e8e8", width=2.6];
+
+    {rank=same; stock; rollback;}
+
+    start    -> discount -> begin -> ins_sale -> ins_line -> trigger -> stock;
+    stock    -> more     [label="  yes"];
+    stock    -> rollback [label="no: not enough stock"];
+    ins_line -> rollback [label="  a key or CHECK fails", constraint=false];
+    more     -> ins_line [label="yes  ", constraint=false];
+    more     -> commit   [label="  no"];
+}
