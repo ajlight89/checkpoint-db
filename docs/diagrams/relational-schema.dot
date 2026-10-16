@@ -1,0 +1,145 @@
+// Relational schema of the Checkpoint-DB database (crow's foot notation).
+// Render: dot -Tsvg relational-schema.dot -o relational-schema.svg
+//         dot -Tpng -Gdpi=300 relational-schema.dot -o relational-schema.png
+digraph schema {
+    graph [rankdir=LR, splines=spline, nodesep=0.5, ranksep=0.9, pad=0.3,
+           fontname="Helvetica", bgcolor="white"];
+    node  [shape=plaintext, fontname="Helvetica", fontsize=11];
+    edge  [dir=both, arrowsize=0.9, penwidth=1.1, color="#333333"];
+
+    platform [label=<
+      <table border="1" cellborder="0" cellspacing="0" cellpadding="4">
+        <tr><td bgcolor="#d9d9d9" colspan="2"><b>platform</b></td></tr>
+        <tr><td align="left">PK</td><td align="left">platform_id</td></tr>
+        <tr><td align="left">UQ</td><td align="left">platform_name</td></tr>
+        <tr><td></td><td align="left">manufacturer</td></tr>
+        <tr><td></td><td align="left">release_year</td></tr>
+      </table>>];
+
+    product [label=<
+      <table border="1" cellborder="0" cellspacing="0" cellpadding="4">
+        <tr><td bgcolor="#d9d9d9" colspan="2"><b>product</b></td></tr>
+        <tr><td align="left">PK</td><td align="left">product_id</td></tr>
+        <tr><td></td><td align="left">name</td></tr>
+        <tr><td></td><td align="left">brand</td></tr>
+        <tr><td></td><td align="left">release_year</td></tr>
+        <tr><td></td><td align="left">product_type</td></tr>
+      </table>>];
+
+    game [label=<
+      <table border="1" cellborder="0" cellspacing="0" cellpadding="4">
+        <tr><td bgcolor="#d9d9d9" colspan="2"><b>game</b></td></tr>
+        <tr><td align="left">PK, FK</td><td align="left">product_id</td></tr>
+        <tr><td></td><td align="left">esrb_rating</td></tr>
+        <tr><td align="left">FK</td><td align="left">platform_id</td></tr>
+      </table>>];
+
+    game_genre [label=<
+      <table border="1" cellborder="0" cellspacing="0" cellpadding="4">
+        <tr><td bgcolor="#d9d9d9" colspan="2"><b>game_genre</b></td></tr>
+        <tr><td align="left">PK, FK</td><td align="left">product_id</td></tr>
+        <tr><td align="left">PK</td><td align="left">genre</td></tr>
+      </table>>];
+
+    console [label=<
+      <table border="1" cellborder="0" cellspacing="0" cellpadding="4">
+        <tr><td bgcolor="#d9d9d9" colspan="2"><b>console</b></td></tr>
+        <tr><td align="left">PK, FK</td><td align="left">product_id</td></tr>
+        <tr><td align="left">UQ</td><td align="left">model_number</td></tr>
+        <tr><td></td><td align="left">storage_gb</td></tr>
+        <tr><td align="left">FK</td><td align="left">platform_id</td></tr>
+      </table>>];
+
+    accessory [label=<
+      <table border="1" cellborder="0" cellspacing="0" cellpadding="4">
+        <tr><td bgcolor="#d9d9d9" colspan="2"><b>accessory</b></td></tr>
+        <tr><td align="left">PK, FK</td><td align="left">product_id</td></tr>
+        <tr><td></td><td align="left">accessory_type</td></tr>
+      </table>>];
+
+    stock_item [label=<
+      <table border="1" cellborder="0" cellspacing="0" cellpadding="4">
+        <tr><td bgcolor="#d9d9d9" colspan="2"><b>stock_item</b></td></tr>
+        <tr><td align="left">PK, FK</td><td align="left">product_id</td></tr>
+        <tr><td align="left">PK</td><td align="left">condition</td></tr>
+        <tr><td></td><td align="left">qty_on_hand</td></tr>
+        <tr><td></td><td align="left">sell_price_cents</td></tr>
+        <tr><td></td><td align="left">trade_value_cents</td></tr>
+        <tr><td></td><td align="left">reorder_threshold</td></tr>
+      </table>>];
+
+    customer [label=<
+      <table border="1" cellborder="0" cellspacing="0" cellpadding="4">
+        <tr><td bgcolor="#d9d9d9" colspan="2"><b>customer</b></td></tr>
+        <tr><td align="left">PK</td><td align="left">customer_id</td></tr>
+        <tr><td></td><td align="left">first_name</td></tr>
+        <tr><td></td><td align="left">last_name</td></tr>
+        <tr><td align="left">UQ</td><td align="left">phone</td></tr>
+      </table>>];
+
+    loyalty_member [label=<
+      <table border="1" cellborder="0" cellspacing="0" cellpadding="4">
+        <tr><td bgcolor="#d9d9d9" colspan="2"><b>loyalty_member</b></td></tr>
+        <tr><td align="left">PK, FK</td><td align="left">customer_id</td></tr>
+        <tr><td></td><td align="left">join_date</td></tr>
+        <tr><td></td><td align="left">expiry_date</td></tr>
+        <tr><td></td><td align="left">email</td></tr>
+      </table>>];
+
+    sale [label=<
+      <table border="1" cellborder="0" cellspacing="0" cellpadding="4">
+        <tr><td bgcolor="#d9d9d9" colspan="2"><b>sale</b></td></tr>
+        <tr><td align="left">PK</td><td align="left">sale_id</td></tr>
+        <tr><td></td><td align="left">sale_datetime</td></tr>
+        <tr><td align="left">FK</td><td align="left">member_id</td></tr>
+        <tr><td></td><td align="left">payment_method</td></tr>
+      </table>>];
+
+    sale_line [label=<
+      <table border="1" cellborder="0" cellspacing="0" cellpadding="4">
+        <tr><td bgcolor="#d9d9d9" colspan="2"><b>sale_line</b></td></tr>
+        <tr><td align="left">PK, FK</td><td align="left">sale_id</td></tr>
+        <tr><td align="left">PK, FK</td><td align="left">product_id</td></tr>
+        <tr><td align="left">PK, FK</td><td align="left">condition</td></tr>
+        <tr><td></td><td align="left">quantity</td></tr>
+        <tr><td></td><td align="left">unit_price_cents</td></tr>
+        <tr><td></td><td align="left">discount_amount_cents</td></tr>
+      </table>>];
+
+    trade_in [label=<
+      <table border="1" cellborder="0" cellspacing="0" cellpadding="4">
+        <tr><td bgcolor="#d9d9d9" colspan="2"><b>trade_in</b></td></tr>
+        <tr><td align="left">PK</td><td align="left">trade_in_id</td></tr>
+        <tr><td></td><td align="left">trade_datetime</td></tr>
+        <tr><td align="left">FK</td><td align="left">customer_id</td></tr>
+      </table>>];
+
+    trade_in_line [label=<
+      <table border="1" cellborder="0" cellspacing="0" cellpadding="4">
+        <tr><td bgcolor="#d9d9d9" colspan="2"><b>trade_in_line</b></td></tr>
+        <tr><td align="left">PK, FK</td><td align="left">trade_in_id</td></tr>
+        <tr><td align="left">PK, FK</td><td align="left">product_id</td></tr>
+        <tr><td align="left">PK, FK</td><td align="left">condition</td></tr>
+        <tr><td></td><td align="left">quantity</td></tr>
+        <tr><td></td><td align="left">unit_value_cents</td></tr>
+      </table>>];
+
+    // Each edge points from the child (foreign key) to the parent.
+    // arrowtail = the child end, arrowhead = the parent end.
+    //   crowodot = zero or many   crowtee = one or many
+    //   teeodot  = zero or one    teetee  = exactly one
+    game          -> product        [arrowtail=teeodot,  arrowhead=teetee];
+    console       -> product        [arrowtail=teeodot,  arrowhead=teetee];
+    accessory     -> product        [arrowtail=teeodot,  arrowhead=teetee];
+    game          -> platform       [arrowtail=crowodot, arrowhead=teetee];
+    console       -> platform       [arrowtail=crowodot, arrowhead=teetee];
+    game_genre    -> game           [arrowtail=crowodot, arrowhead=teetee];
+    stock_item    -> product        [arrowtail=crowodot, arrowhead=teetee];
+    loyalty_member -> customer      [arrowtail=teeodot,  arrowhead=teetee];
+    sale          -> loyalty_member [arrowtail=crowodot, arrowhead=teeodot];
+    sale_line     -> sale           [arrowtail=crowtee,  arrowhead=teetee];
+    sale_line     -> stock_item     [arrowtail=crowodot, arrowhead=teetee];
+    trade_in      -> customer       [arrowtail=crowodot, arrowhead=teetee];
+    trade_in_line -> trade_in       [arrowtail=crowtee,  arrowhead=teetee];
+    trade_in_line -> stock_item     [arrowtail=crowodot, arrowhead=teetee];
+}
