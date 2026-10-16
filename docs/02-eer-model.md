@@ -10,6 +10,10 @@ The diagram source is `diagrams/eer-model.drawio.svg`, which opens in draw.io; `
 
 ## Notation
 
+The same key is drawn as a figure in `diagrams/notation-key.drawio.svg`, with a 300 DPI export in `diagrams/notation-key.png`.
+
+![EER notation key](diagrams/notation-key.drawio.svg)
+
 | Symbol                  | Meaning                                                   |
 | ----------------------- | --------------------------------------------------------- |
 | Rectangle               | Entity type                                               |
