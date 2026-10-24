@@ -1,9 +1,13 @@
-"""Database connections and transactions."""
+"""Database connections, transactions, and setup."""
 
 import sqlite3
 from collections.abc import Generator
 from contextlib import contextmanager
+from importlib import resources
 from pathlib import Path
+
+# SQL scripts that build a database, in the order they run.
+SCRIPTS = ("schema.sql",)
 
 
 def connect(path: str | Path = ":memory:") -> sqlite3.Connection:
@@ -31,3 +35,17 @@ def transaction(conn: sqlite3.Connection) -> Generator[sqlite3.Connection]:
             conn.execute("ROLLBACK")
         raise
     conn.execute("COMMIT")
+
+
+def read_sql(name: str) -> str:
+    """Return the text of an SQL script in the package's ``sql`` folder."""
+    return (
+        resources.files("checkpoint").joinpath("sql", name).read_text(encoding="utf-8")
+    )
+
+
+def initialize(conn: sqlite3.Connection) -> None:
+    """Build the database by running every script in ``SCRIPTS`` in one transaction."""
+    with transaction(conn):
+        for name in SCRIPTS:
+            conn.executescript(read_sql(name))

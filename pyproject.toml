@@ -21,6 +21,9 @@ checkpoint = "checkpoint.__main__:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+checkpoint = ["sql/*.sql"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
