@@ -7,7 +7,7 @@ from importlib import resources
 from pathlib import Path
 
 # SQL scripts that build a database, in the order they run.
-SCRIPTS = ("schema.sql", "triggers.sql")
+SCRIPTS = ("schema.sql", "triggers.sql", "views.sql")
 
 
 def connect(path: str | Path = ":memory:") -> sqlite3.Connection:
