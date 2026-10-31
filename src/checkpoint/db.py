@@ -9,6 +9,9 @@ from pathlib import Path
 # SQL scripts that build a database, in the order they run.
 SCRIPTS = ("schema.sql", "triggers.sql", "views.sql")
 
+# Sample rows for demonstrations, loaded separately so new databases start empty.
+DEMO_SCRIPT = "demo.sql"
+
 
 def connect(path: str | Path = ":memory:") -> sqlite3.Connection:
     """Open a connection with foreign key enforcement turned on.
@@ -49,3 +52,12 @@ def initialize(conn: sqlite3.Connection) -> None:
     with transaction(conn):
         for name in SCRIPTS:
             conn.executescript(read_sql(name))
+
+
+def load_demo(conn: sqlite3.Connection) -> None:
+    """Insert the sample rows in ``demo.sql`` in one transaction.
+
+    Run on a database that ``initialize()`` has built and that has no rows yet.
+    """
+    with transaction(conn):
+        conn.executescript(read_sql(DEMO_SCRIPT))
