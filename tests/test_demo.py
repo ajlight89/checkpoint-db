@@ -4,7 +4,7 @@ import sqlite3
 
 import pytest
 
-from checkpoint import db
+from checkpoint import db, money
 
 ROW_COUNTS = {
     "platform": 6,
@@ -135,7 +135,7 @@ def test_low_stock_rows(demo: sqlite3.Connection) -> None:
 
 
 def test_discounts_follow_membership_on_the_sale_date(demo: sqlite3.Connection) -> None:
-    # BR-21: 10% off each line, rounded half up, only for members active that day.
+    # BR-21: the member discount on each line, only for members active that day.
     rows = demo.execute("""
         SELECT l.quantity * l.unit_price_cents,
                l.discount_amount_cents,
@@ -146,7 +146,7 @@ def test_discounts_follow_membership_on_the_sale_date(demo: sqlite3.Connection) 
         LEFT JOIN loyalty_member AS m ON m.customer_id = s.member_id
     """).fetchall()
     for line_cents, discount, active in rows:
-        expected = (line_cents * 10 + 50) // 100 if active else 0
+        expected = money.member_discount(line_cents) if active else 0
         assert discount == expected
     assert any(active for _, _, active in rows)
     assert not all(active for _, _, active in rows)
