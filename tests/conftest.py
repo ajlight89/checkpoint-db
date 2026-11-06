@@ -35,3 +35,10 @@ def base(conn: sqlite3.Connection) -> sqlite3.Connection:
     """The ``conn`` database with the base rows inserted."""
     conn.executescript(BASE_ROWS)
     return conn
+
+
+@pytest.fixture
+def demo(conn: sqlite3.Connection) -> sqlite3.Connection:
+    """The ``conn`` database with the sample rows loaded."""
+    db.load_demo(conn)
+    return conn

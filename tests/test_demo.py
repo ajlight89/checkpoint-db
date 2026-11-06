@@ -4,7 +4,7 @@ import sqlite3
 
 import pytest
 
-from checkpoint import db, money
+from checkpoint import money
 
 ROW_COUNTS = {
     "platform": 6,
@@ -30,13 +30,6 @@ STOCK_AFTER = [
     pytest.param(15, "new", 6, id="10 - 4 sold"),
     pytest.param(16, "new", 1, id="4 - 3 sold"),
 ]
-
-
-@pytest.fixture
-def demo(conn: sqlite3.Connection) -> sqlite3.Connection:
-    """The ``conn`` database with the sample rows loaded."""
-    db.load_demo(conn)
-    return conn
 
 
 def test_new_database_starts_empty(conn: sqlite3.Connection) -> None:
