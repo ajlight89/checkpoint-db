@@ -46,3 +46,27 @@ def purchases_per_member(conn: sqlite3.Connection, start: str, end: str) -> list
         ORDER BY m.customer_id
     """
     return conn.execute(sql, (start, end)).fetchall()
+
+
+def platforms_with_game_sales(
+    conn: sqlite3.Connection, start: str, end: str, min_units: int
+) -> list[tuple]:
+    """Return the platforms that sold at least ``min_units`` games in a period.
+
+    The period runs from ``start`` up to but not including ``end``, both
+    written as 'YYYY-MM-DD'. Each row is (platform_name, units), sorted by
+    units from most to fewest and then by name. Only game units count.
+    """
+    # WHERE picks the sale lines before grouping; HAVING picks the groups after.
+    sql = """
+        SELECT pl.platform_name, SUM(sl.quantity) AS units
+        FROM sale_line AS sl
+        JOIN sale AS s ON s.sale_id = sl.sale_id
+        JOIN game AS g ON g.product_id = sl.product_id
+        JOIN platform AS pl ON pl.platform_id = g.platform_id
+        WHERE s.sale_datetime >= ? AND s.sale_datetime < ?
+        GROUP BY pl.platform_id, pl.platform_name
+        HAVING SUM(sl.quantity) >= ?
+        ORDER BY units DESC, pl.platform_name
+    """
+    return conn.execute(sql, (start, end, min_units)).fetchall()

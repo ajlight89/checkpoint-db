@@ -51,3 +51,22 @@ def test_purchases_per_member_counts_every_sale(demo: sqlite3.Connection) -> Non
         (7, "Hannah", "Kim", 1),
         (9, "Grace", "Okafor", 1),
     ]
+
+
+def test_platforms_with_game_sales_in_november(demo: sqlite3.Connection) -> None:
+    # November game units: Nintendo 64 2 (one line of 2), Nintendo Switch 2,
+    # Super Nintendo 1, Xbox Series X|S 1. Console sales do not count.
+    assert queries.platforms_with_game_sales(demo, "2026-11-01", "2026-12-01", 2) == [
+        ("Nintendo 64", 2),
+        ("Nintendo Switch", 2),
+    ]
+
+
+def test_platforms_with_game_sales_over_both_months(demo: sqlite3.Connection) -> None:
+    # PlayStation 4 and Xbox Series X|S sold 1 game each, below the minimum.
+    assert queries.platforms_with_game_sales(demo, "2026-10-01", "2026-12-01", 2) == [
+        ("Nintendo Switch", 3),
+        ("Nintendo 64", 2),
+        ("PlayStation 5", 2),
+        ("Super Nintendo", 2),
+    ]

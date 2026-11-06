@@ -102,3 +102,46 @@ The selection is applied to SALE before the outer join, which matches placing th
 |           9 | Grace      | Okafor    |         1 |
 
 Members 5 and 9 have expired memberships but are still listed, because the query counts purchases by every member on record.
+
+## Q3: Platforms with at Least N Game Units Sold in a Period
+
+**Question:** Which platforms sold at least a given number of game units in a given period?
+
+**Concepts:** GROUP BY with HAVING, and SUM. `WHERE` filters rows before they are grouped, so it selects the sale lines in the period. `HAVING` filters groups after the aggregate is computed, so it compares each platform's total with the minimum. An aggregate cannot appear in `WHERE`, because no groups exist yet when `WHERE` runs. The total is `SUM(sl.quantity)`, not `COUNT(*)`: one sale line can carry several units. Joining to `game` leaves out console sales, even though consoles also belong to a platform.
+
+**SQL** (function `platforms_with_game_sales(conn, start, end, min_units)`):
+
+```sql
+SELECT pl.platform_name, SUM(sl.quantity) AS units
+FROM sale_line AS sl
+JOIN sale AS s ON s.sale_id = sl.sale_id
+JOIN game AS g ON g.product_id = sl.product_id
+JOIN platform AS pl ON pl.platform_id = g.platform_id
+WHERE s.sale_datetime >= ? AND s.sale_datetime < ?
+GROUP BY pl.platform_id, pl.platform_name
+HAVING SUM(sl.quantity) >= ?
+ORDER BY units DESC, pl.platform_name;
+```
+
+**Relational algebra** (November 2026, at least 2 units):
+
+```text
+PERIOD_SALES  ← σ sale_datetime ≥ '2026-11-01' AND sale_datetime < '2026-12-01' (SALE)
+PERIOD_LINES  ← SALE_LINE ⋈ SALE_LINE.sale_id = PERIOD_SALES.sale_id PERIOD_SALES
+GAME_LINES    ← PERIOD_LINES ⋈ PERIOD_LINES.product_id = GAME.product_id GAME
+WITH_PLATFORM ← GAME_LINES ⋈ GAME_LINES.platform_id = PLATFORM.platform_id PLATFORM
+UNITS(platform_id, platform_name, units)
+              ← platform_id, platform_name ℑ SUM quantity (WITH_PLATFORM)
+RESULT        ← π platform_name, units (σ units ≥ 2 (UNITS))
+```
+
+The selection on SALE corresponds to `WHERE`, and the selection on UNITS, applied after the aggregate function, corresponds to `HAVING`. Listing attribute names on the left of ← renames the attributes of the result. The query has no calculus form, for the same reason as Q2.
+
+**Result** (November 2026, at least 2 units):
+
+| platform_name   | units |
+| --------------- | ----: |
+| Nintendo 64     |     2 |
+| Nintendo Switch |     2 |
+
+Super Nintendo and Xbox Series X|S each sold 1 game in November and fall below the minimum. Nintendo 64's 2 units come from a single sale line with a quantity of 2.
