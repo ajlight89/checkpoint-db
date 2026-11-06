@@ -4,7 +4,7 @@ This document presents the report queries in SQL, relational algebra, and, for s
 
 ## Notation
 
-The relational algebra follows Elmasri and Navathe, Chapter 8: σ (select), π (project), ⋈ (join, with its condition written as a subscript), ⟕ (left outer join), ℑ (aggregate function, with the grouping attributes on its left), and ← (assign a result to a name). Relation names are written in capitals. Relations are sets, so the algebra has no sort order; the SQL's `ORDER BY` only arranges the rows for display. The tuple relational calculus uses the same chapter's form, { t.attribute, … | condition }, where `R(t)` means tuple t belongs to relation R and ∃ means "there exists".
+The relational algebra follows Elmasri and Navathe, Chapter 8: σ (select), π (project), ⋈ (join, with its condition written as a subscript), ⟕ (left outer join), ℑ (aggregate function, with the grouping attributes on its left), ÷ (division), and ← (assign a result to a name). Relation names are written in capitals. Relations are sets, so the algebra has no sort order; the SQL's `ORDER BY` only arranges the rows for display. The tuple relational calculus uses the same chapter's form, { t.attribute, … | condition }, where `R(t)` means tuple t belongs to relation R, ∃ means "there exists", and ∀ means "for all".
 
 ## Q1: In-Stock Games for a Platform
 
@@ -197,3 +197,71 @@ Relational algebra has no subqueries. The equivalent computes every condition's 
 | Super Mario 64                          | Nintendo 64     | used_loose    |             3999 |
 
 The averages are 3659 cents for the five used_complete records and 3499 cents for the three used_loose records. Mario Kart 8 Deluxe in used_loose condition costs exactly 3499 cents, so it is not listed.
+
+## Q5: Members Who Bought Every Type of Product
+
+**Question:** Which loyalty members have bought a game, a console, and an accessory?
+
+**Concepts:** relational division, written in SQL as a double negation with `NOT EXISTS`. SQL has no division operator and no "for all". The question "has the member bought every type?" is restated as "is there no type that the member has not bought?": the outer `NOT EXISTS` looks for a product type, and the inner `NOT EXISTS` checks that the member has no sale line of that type. A member is kept when the outer search finds nothing. The set of types comes from the `product` table rather than a fixed list. Sales with no member have a NULL `member_id`, which never equals a member's `customer_id`, so they count for no one.
+
+An equivalent formulation groups each member's sale lines and keeps the members for whom `COUNT(DISTINCT p.product_type)` equals the number of distinct types in `product`. The double negation is used here because it follows the calculus form below line for line.
+
+**SQL** (function `members_who_bought_every_type(conn)`):
+
+```sql
+SELECT c.customer_id, c.first_name, c.last_name
+FROM loyalty_member AS m
+JOIN customer AS c ON c.customer_id = m.customer_id
+WHERE NOT EXISTS (
+    SELECT *
+    FROM (SELECT DISTINCT product_type FROM product) AS t
+    WHERE NOT EXISTS (
+        SELECT *
+        FROM sale AS s
+        JOIN sale_line AS sl ON sl.sale_id = s.sale_id
+        JOIN product AS p ON p.product_id = sl.product_id
+        WHERE s.member_id = m.customer_id
+            AND p.product_type = t.product_type
+    )
+)
+ORDER BY c.customer_id;
+```
+
+**Relational algebra:**
+
+```text
+MEMBER_SALES ← LOYALTY_MEMBER ⋈ LOYALTY_MEMBER.customer_id = SALE.member_id SALE
+MEMBER_LINES ← MEMBER_SALES ⋈ MEMBER_SALES.sale_id = SALE_LINE.sale_id SALE_LINE
+MEMBER_TYPES ← π customer_id, product_type
+                 (MEMBER_LINES ⋈ MEMBER_LINES.product_id = PRODUCT.product_id PRODUCT)
+ALL_TYPES    ← π product_type (PRODUCT)
+BUYERS       ← MEMBER_TYPES ÷ ALL_TYPES
+RESULT       ← π customer_id, first_name, last_name
+                 (BUYERS ⋈ BUYERS.customer_id = CUSTOMER.customer_id CUSTOMER)
+```
+
+MEMBER_TYPES pairs each member with every type the member has bought. Division keeps the values of the attributes that are not in the divisor (here `customer_id`) that appear in MEMBER_TYPES together with every tuple of ALL_TYPES. Starting from LOYALTY_MEMBER leaves out sales with no member.
+
+**Tuple relational calculus:**
+
+```text
+{ c.customer_id, c.first_name, c.last_name |
+    CUSTOMER(c)
+    AND (∃m)(LOYALTY_MEMBER(m) AND m.customer_id = c.customer_id)
+    AND (∀t)(NOT PRODUCT(t) OR
+        (∃s)(∃l)(∃p)(SALE(s) AND SALE_LINE(l) AND PRODUCT(p)
+            AND s.member_id = c.customer_id
+            AND l.sale_id = s.sale_id
+            AND p.product_id = l.product_id
+            AND p.product_type = t.product_type)) }
+```
+
+The universal quantifier reads "for every product t, either t is not a product or the customer bought something of t's type". Because (∀t)(F) is equivalent to NOT (∃t)(NOT F), the formula becomes "there is no product whose type the customer has not bought", which is the SQL's double `NOT EXISTS`.
+
+**Result:**
+
+| customer_id | first_name | last_name |
+| ----------: | ---------- | --------- |
+|           1 | Maya       | Chen      |
+
+Maya Chen bought a game and an accessory in sale 2 and a console and a game in sale 11. Priya Patel (member 3) bought a console and accessories but no game, and Hannah Kim (member 7) bought a game and an accessory but no console.

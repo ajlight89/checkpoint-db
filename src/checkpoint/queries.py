@@ -96,3 +96,33 @@ def used_games_above_average(conn: sqlite3.Connection) -> list[tuple]:
         ORDER BY s.condition, s.sell_price_cents DESC, p.name
     """
     return conn.execute(sql).fetchall()
+
+
+def members_who_bought_every_type(conn: sqlite3.Connection) -> list[tuple]:
+    """Return the loyalty members who have bought every type of product.
+
+    The types are those found in the product table: game, console, and
+    accessory. Each row is (customer_id, first_name, last_name), sorted by
+    customer_id.
+    """
+    # Relational division as a double negation: keep a member when there is
+    # no product type that the member has not bought.
+    sql = """
+        SELECT c.customer_id, c.first_name, c.last_name
+        FROM loyalty_member AS m
+        JOIN customer AS c ON c.customer_id = m.customer_id
+        WHERE NOT EXISTS (
+            SELECT *
+            FROM (SELECT DISTINCT product_type FROM product) AS t
+            WHERE NOT EXISTS (
+                SELECT *
+                FROM sale AS s
+                JOIN sale_line AS sl ON sl.sale_id = s.sale_id
+                JOIN product AS p ON p.product_id = sl.product_id
+                WHERE s.member_id = m.customer_id
+                    AND p.product_type = t.product_type
+            )
+        )
+        ORDER BY c.customer_id
+    """
+    return conn.execute(sql).fetchall()

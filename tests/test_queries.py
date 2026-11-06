@@ -100,3 +100,27 @@ def test_used_games_above_average_per_condition(demo: sqlite3.Connection) -> Non
         ("Super Mario World", "Super Nintendo", "used_complete", 69999),
         ("Super Mario 64", "Nintendo 64", "used_loose", 3999),
     ]
+
+
+def test_members_who_bought_every_type(demo: sqlite3.Connection) -> None:
+    # Member 1 bought a game and an accessory (sale 2) and a console (sale 11).
+    # Member 3 bought no game and member 7 no console. Sales with no member
+    # include all three types but belong to no member.
+    assert queries.members_who_bought_every_type(demo) == [(1, "Maya", "Chen")]
+
+
+def test_members_who_bought_every_type_after_new_sales(
+    demo: sqlite3.Connection,
+) -> None:
+    # Member 7 (game, accessory) buys a console and completes the set.
+    # Member 2 (games only) buys a console but still has no accessory.
+    demo.executescript("""
+        INSERT INTO sale VALUES (13, '2026-11-12 18:00:00', 7, 'card');
+        INSERT INTO sale_line VALUES (13, 10, 'new', 1, 34999, 3500);
+        INSERT INTO sale VALUES (14, '2026-11-12 18:30:00', 2, 'cash');
+        INSERT INTO sale_line VALUES (14, 11, 'new', 1, 49999, 5000);
+    """)
+    assert queries.members_who_bought_every_type(demo) == [
+        (1, "Maya", "Chen"),
+        (7, "Hannah", "Kim"),
+    ]
