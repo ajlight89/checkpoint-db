@@ -25,3 +25,29 @@ def test_in_stock_games_leaves_out_sold_out_stock(demo: sqlite3.Connection) -> N
         ("Astro Bot", "new", 3, 5999),
         ("Elden Ring", "used_complete", 4, 3999),
     ]
+
+
+def test_purchases_per_member_includes_members_with_none(
+    demo: sqlite3.Connection,
+) -> None:
+    # November sales by members: sale 9 (member 2), 11 (member 1), 12 (member 9).
+    assert queries.purchases_per_member(demo, "2026-11-01", "2026-12-01") == [
+        (1, "Maya", "Chen", 1),
+        (2, "Jordan", "Reyes", 1),
+        (3, "Priya", "Patel", 0),
+        (5, "Sofia", "Rossi", 0),
+        (7, "Hannah", "Kim", 0),
+        (9, "Grace", "Okafor", 1),
+    ]
+
+
+def test_purchases_per_member_counts_every_sale(demo: sqlite3.Connection) -> None:
+    # October and November together: member 1 made sales 2 and 11.
+    assert queries.purchases_per_member(demo, "2026-10-01", "2026-12-01") == [
+        (1, "Maya", "Chen", 2),
+        (2, "Jordan", "Reyes", 1),
+        (3, "Priya", "Patel", 1),
+        (5, "Sofia", "Rossi", 1),
+        (7, "Hannah", "Kim", 1),
+        (9, "Grace", "Okafor", 1),
+    ]

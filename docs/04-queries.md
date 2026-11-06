@@ -4,7 +4,7 @@ This document presents the report queries in SQL, relational algebra, and, for s
 
 ## Notation
 
-The relational algebra follows Elmasri and Navathe, Chapter 8: σ (select), π (project), ⋈ (join, with its condition written as a subscript), and ← (assign a result to a name). Relation names are written in capitals. Relations are sets, so the algebra has no sort order; the SQL's `ORDER BY` only arranges the rows for display. The tuple relational calculus uses the same chapter's form, { t.attribute, … | condition }, where `R(t)` means tuple t belongs to relation R and ∃ means "there exists".
+The relational algebra follows Elmasri and Navathe, Chapter 8: σ (select), π (project), ⋈ (join, with its condition written as a subscript), ⟕ (left outer join), ℑ (aggregate function, with the grouping attributes on its left), and ← (assign a result to a name). Relation names are written in capitals. Relations are sets, so the algebra has no sort order; the SQL's `ORDER BY` only arranges the rows for display. The tuple relational calculus uses the same chapter's form, { t.attribute, … | condition }, where `R(t)` means tuple t belongs to relation R and ∃ means "there exists".
 
 ## Q1: In-Stock Games for a Platform
 
@@ -56,3 +56,49 @@ The tuple variables s and p are free because the result takes attributes from th
 | Elden Ring | used_complete |           4 |             3999 |
 
 Astro Bot started with 4 new copies and sold 1. Elden Ring started with 5 new copies and sold 1, and with 3 used copies and received 1 in a trade-in.
+
+## Q2: Purchases per Member in a Period
+
+**Question:** How many purchases did each loyalty member make in a given period, including members who made none?
+
+**Concepts:** left outer join, COUNT, and GROUP BY. An inner join keeps only members with a matching sale, so members with no purchases would disappear. A left join keeps every member and fills the sale columns with NULL when no sale matches. `COUNT(s.sale_id)` counts only non-NULL values, so those members get 0; `COUNT(*)` would count the NULL-filled row and report 1.
+
+The period test belongs in the join's `ON` clause. In `WHERE`, it would run after the join, the NULL `sale_datetime` of a member with no sales would fail it, and that member's row would be removed: the left join would act like an inner join. The period runs from the start date up to but not including the end date, so consecutive periods never count a sale twice.
+
+**SQL** (function `purchases_per_member(conn, start, end)`):
+
+```sql
+SELECT m.customer_id, c.first_name, c.last_name, COUNT(s.sale_id)
+FROM loyalty_member AS m
+JOIN customer AS c ON c.customer_id = m.customer_id
+LEFT JOIN sale AS s
+    ON s.member_id = m.customer_id
+    AND s.sale_datetime >= ?
+    AND s.sale_datetime < ?
+GROUP BY m.customer_id, c.first_name, c.last_name
+ORDER BY m.customer_id;
+```
+
+**Relational algebra** (November 2026):
+
+```text
+PERIOD_SALES ← σ sale_datetime ≥ '2026-11-01' AND sale_datetime < '2026-12-01' (SALE)
+MEMBERS      ← LOYALTY_MEMBER ⋈ LOYALTY_MEMBER.customer_id = CUSTOMER.customer_id CUSTOMER
+MEMBER_SALES ← MEMBERS ⟕ MEMBERS.customer_id = PERIOD_SALES.member_id PERIOD_SALES
+RESULT       ← customer_id, first_name, last_name ℑ COUNT sale_id (MEMBER_SALES)
+```
+
+The selection is applied to SALE before the outer join, which matches placing the period test in the `ON` clause. Basic tuple relational calculus has no aggregate functions, so this query has no calculus form.
+
+**Result** (November 2026):
+
+| customer_id | first_name | last_name | purchases |
+| ----------: | ---------- | --------- | --------: |
+|           1 | Maya       | Chen      |         1 |
+|           2 | Jordan     | Reyes     |         1 |
+|           3 | Priya      | Patel     |         0 |
+|           5 | Sofia      | Rossi     |         0 |
+|           7 | Hannah     | Kim       |         0 |
+|           9 | Grace      | Okafor    |         1 |
+
+Members 5 and 9 have expired memberships but are still listed, because the query counts purchases by every member on record.

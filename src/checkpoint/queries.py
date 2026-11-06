@@ -22,3 +22,27 @@ def in_stock_games(conn: sqlite3.Connection, platform_id: int) -> list[tuple]:
         ORDER BY p.name, s.condition
     """
     return conn.execute(sql, (platform_id,)).fetchall()
+
+
+def purchases_per_member(conn: sqlite3.Connection, start: str, end: str) -> list[tuple]:
+    """Return how many purchases each loyalty member made in a period.
+
+    The period runs from ``start`` up to but not including ``end``, both
+    written as 'YYYY-MM-DD'. Each row is (customer_id, first_name, last_name,
+    purchases), sorted by customer_id. Members with no purchases in the
+    period are included with a count of 0.
+    """
+    # The period test sits in the ON clause. In WHERE, it would remove the
+    # rows the LEFT JOIN keeps for members with no sales.
+    sql = """
+        SELECT m.customer_id, c.first_name, c.last_name, COUNT(s.sale_id)
+        FROM loyalty_member AS m
+        JOIN customer AS c ON c.customer_id = m.customer_id
+        LEFT JOIN sale AS s
+            ON s.member_id = m.customer_id
+            AND s.sale_datetime >= ?
+            AND s.sale_datetime < ?
+        GROUP BY m.customer_id, c.first_name, c.last_name
+        ORDER BY m.customer_id
+    """
+    return conn.execute(sql, (start, end)).fetchall()
