@@ -70,3 +70,29 @@ def platforms_with_game_sales(
         ORDER BY units DESC, pl.platform_name
     """
     return conn.execute(sql, (start, end, min_units)).fetchall()
+
+
+def used_games_above_average(conn: sqlite3.Connection) -> list[tuple]:
+    """Return used games priced above the average used game in the same condition.
+
+    Each row is (name, platform_name, condition, sell_price_cents), sorted by
+    condition, then by price from highest to lowest, then by name.
+    """
+    # The subquery is correlated: it refers to s.condition from the outer
+    # query, so it computes a separate average for each outer row's condition.
+    sql = """
+        SELECT p.name, pl.platform_name, s.condition, s.sell_price_cents
+        FROM stock_item AS s
+        JOIN game AS g ON g.product_id = s.product_id
+        JOIN product AS p ON p.product_id = s.product_id
+        JOIN platform AS pl ON pl.platform_id = g.platform_id
+        WHERE s.condition <> 'new'
+            AND s.sell_price_cents > (
+                SELECT AVG(s2.sell_price_cents)
+                FROM stock_item AS s2
+                JOIN game AS g2 ON g2.product_id = s2.product_id
+                WHERE s2.condition = s.condition
+            )
+        ORDER BY s.condition, s.sell_price_cents DESC, p.name
+    """
+    return conn.execute(sql).fetchall()

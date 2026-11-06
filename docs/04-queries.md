@@ -145,3 +145,55 @@ The selection on SALE corresponds to `WHERE`, and the selection on UNITS, applie
 | Nintendo Switch |     2 |
 
 Super Nintendo and Xbox Series X|S each sold 1 game in November and fall below the minimum. Nintendo 64's 2 units come from a single sale line with a quantity of 2.
+
+## Q4: Used Games Priced Above Their Condition's Average
+
+**Question:** Which used games are priced above the average price of used games in the same condition?
+
+**Concepts:** correlated subquery and AVG. The subquery refers to `s.condition`, a column of the outer query, so it is evaluated for each outer row and returns the average for that row's condition. An uncorrelated subquery would return one value for every row. The subquery joins to `game`, so the averages include only games; used consoles cost far more and would raise the averages. The comparison is a strict `>`, so a price equal to the average is not above it.
+
+In the sample data, each platform has at most one used stock record per condition, so an average per platform and condition would equal each record's own price and no row would qualify. The query therefore compares each record with all used games in the same condition.
+
+**SQL** (function `used_games_above_average(conn)`):
+
+```sql
+SELECT p.name, pl.platform_name, s.condition, s.sell_price_cents
+FROM stock_item AS s
+JOIN game AS g ON g.product_id = s.product_id
+JOIN product AS p ON p.product_id = s.product_id
+JOIN platform AS pl ON pl.platform_id = g.platform_id
+WHERE s.condition <> 'new'
+    AND s.sell_price_cents > (
+        SELECT AVG(s2.sell_price_cents)
+        FROM stock_item AS s2
+        JOIN game AS g2 ON g2.product_id = s2.product_id
+        WHERE s2.condition = s.condition
+    )
+ORDER BY s.condition, s.sell_price_cents DESC, p.name;
+```
+
+**Relational algebra:**
+
+```text
+USED_GAMES ← σ condition ≠ 'new' (STOCK_ITEM ⋈ STOCK_ITEM.product_id = GAME.product_id GAME)
+AVERAGES(avg_condition, avg_price)
+           ← condition ℑ AVERAGE sell_price_cents (USED_GAMES)
+ABOVE      ← σ sell_price_cents > avg_price
+               (USED_GAMES ⋈ USED_GAMES.condition = AVERAGES.avg_condition AVERAGES)
+NAMED      ← ABOVE ⋈ ABOVE.product_id = PRODUCT.product_id PRODUCT
+RESULT     ← π name, platform_name, condition, sell_price_cents
+               (NAMED ⋈ NAMED.platform_id = PLATFORM.platform_id PLATFORM)
+```
+
+Relational algebra has no subqueries. The equivalent computes every condition's average once with the aggregate function, joins each used game to the average for its condition, and selects the games priced above it. The query has no calculus form, for the same reason as Q2.
+
+**Result:**
+
+| name                                    | platform_name   | condition     | sell_price_cents |
+| --------------------------------------- | --------------- | ------------- | ---------------: |
+| Super Mario World                       | Super Nintendo  | used_complete |             6999 |
+| Elden Ring                              | PlayStation 5   | used_complete |             3999 |
+| The Legend of Zelda: Breath of the Wild | Nintendo Switch | used_complete |             3999 |
+| Super Mario 64                          | Nintendo 64     | used_loose    |             3999 |
+
+The averages are 3659 cents for the five used_complete records and 3499 cents for the three used_loose records. Mario Kart 8 Deluxe in used_loose condition costs exactly 3499 cents, so it is not listed.

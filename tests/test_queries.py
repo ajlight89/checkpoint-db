@@ -70,3 +70,33 @@ def test_platforms_with_game_sales_over_both_months(demo: sqlite3.Connection) ->
         ("PlayStation 5", 2),
         ("Super Nintendo", 2),
     ]
+
+
+def test_used_games_above_average(demo: sqlite3.Connection) -> None:
+    # Averages over used games only: used_complete 3659 (5 records),
+    # used_loose 3499 (3 records). Mario Kart 8 Deluxe used_loose is priced
+    # exactly at its average, so it is not above it.
+    assert queries.used_games_above_average(demo) == [
+        ("Super Mario World", "Super Nintendo", "used_complete", 6999),
+        ("Elden Ring", "PlayStation 5", "used_complete", 3999),
+        (
+            "The Legend of Zelda: Breath of the Wild",
+            "Nintendo Switch",
+            "used_complete",
+            3999,
+        ),
+        ("Super Mario 64", "Nintendo 64", "used_loose", 3999),
+    ]
+
+
+def test_used_games_above_average_per_condition(demo: sqlite3.Connection) -> None:
+    # Raising one used_complete price lifts only the used_complete average.
+    # Super Mario 64 stays above the used_loose average of 3499.
+    demo.execute(
+        "UPDATE stock_item SET sell_price_cents = 69999 "
+        "WHERE product_id = 7 AND condition = 'used_complete'"
+    )
+    assert queries.used_games_above_average(demo) == [
+        ("Super Mario World", "Super Nintendo", "used_complete", 69999),
+        ("Super Mario 64", "Nintendo 64", "used_loose", 3999),
+    ]
