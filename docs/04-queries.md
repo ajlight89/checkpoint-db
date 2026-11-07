@@ -4,7 +4,7 @@ This document presents the report queries in SQL, relational algebra, and, for s
 
 ## Notation
 
-The relational algebra follows Elmasri and Navathe, Chapter 8: σ (select), π (project), ⋈ (join, with its condition written as a subscript), ⟕ (left outer join), ℑ (aggregate function, with the grouping attributes on its left), ÷ (division), and ← (assign a result to a name). Relation names are written in capitals. Relations are sets, so the algebra has no sort order; the SQL's `ORDER BY` only arranges the rows for display. The tuple relational calculus uses the same chapter's form, { t.attribute, … | condition }, where `R(t)` means tuple t belongs to relation R, ∃ means "there exists", and ∀ means "for all".
+The relational algebra follows Elmasri and Navathe, Chapter 8: σ (select), π (project), − (set difference), ⋈ (join, with its condition written as a subscript), ⟕ (left outer join), ℑ (aggregate function, with the grouping attributes on its left), ÷ (division), and ← (assign a result to a name). Relation names are written in capitals. Relations are sets, so the algebra has no sort order; the SQL's `ORDER BY` only arranges the rows for display. The tuple relational calculus uses the same chapter's form, { t.attribute, … | condition }, where `R(t)` means tuple t belongs to relation R, ∃ means "there exists", and ∀ means "for all".
 
 ## Q1: In-Stock Games for a Platform
 
@@ -265,3 +265,71 @@ The universal quantifier reads "for every product t, either t is not a product o
 |           1 | Maya       | Chen      |
 
 Maya Chen bought a game and an accessory in sale 2 and a console and a game in sale 11. Priya Patel (member 3) bought a console and accessories but no game, and Hannah Kim (member 7) bought a game and an accessory but no console.
+
+## Q6: In-Stock Products with No Recent Sales
+
+**Question:** Which products are in stock but have not sold in the given number of days (90 by default) before a given date?
+
+**Concepts:** `EXISTS`, `NOT EXISTS`, and set difference. `EXISTS` is true when its subquery returns at least one row. Testing stock with `EXISTS` rather than a join keeps each product to one row, even when several of its stock records have units on hand; a join would repeat the product once per matching stock record. `NOT EXISTS` keeps a product only when no sale line for it falls in the window. The window is computed by SQLite's `date()` function: `date('2026-11-13', '-30 days')` is `'2026-10-14'`. The window includes its start and stops just before the given date. The reference date is a parameter rather than the current date, so the result does not change from one day to the next. Stock is the current quantity on hand, whatever the reference date.
+
+**SQL** (function `products_without_recent_sales(conn, as_of, days=90)`):
+
+```sql
+SELECT p.product_id, p.name, p.product_type
+FROM product AS p
+WHERE EXISTS (
+        SELECT *
+        FROM stock_item AS st
+        WHERE st.product_id = p.product_id AND st.qty_on_hand > 0
+    )
+    AND NOT EXISTS (
+        SELECT *
+        FROM sale_line AS sl
+        JOIN sale AS s ON s.sale_id = sl.sale_id
+        WHERE sl.product_id = p.product_id
+            AND s.sale_datetime >= date(?, '-' || ? || ' days')
+            AND s.sale_datetime < ?
+    )
+ORDER BY p.product_id;
+```
+
+The `||` operator joins text, so a `days` value of 30 produces the modifier `'-30 days'`. The number is still bound to a placeholder, never pasted into the SQL text.
+
+**Relational algebra** (30 days before 2026-11-13):
+
+```text
+IN_STOCK      ← π product_id (σ qty_on_hand > 0 (STOCK_ITEM))
+WINDOW_SALES  ← σ sale_datetime ≥ '2026-10-14' AND sale_datetime < '2026-11-13' (SALE)
+RECENT        ← π product_id
+                  (SALE_LINE ⋈ SALE_LINE.sale_id = WINDOW_SALES.sale_id WINDOW_SALES)
+IDLE          ← IN_STOCK − RECENT
+RESULT        ← π product_id, name, product_type
+                  (IDLE ⋈ IDLE.product_id = PRODUCT.product_id PRODUCT)
+```
+
+Relations are sets, so projecting IN_STOCK onto `product_id` lists each product once, as `EXISTS` does in the SQL. The set difference IN_STOCK − RECENT corresponds to `NOT EXISTS`: it keeps the products in stock that are not among the recently sold ones.
+
+**Tuple relational calculus** (30 days before 2026-11-13):
+
+```text
+{ p.product_id, p.name, p.product_type |
+    PRODUCT(p)
+    AND (∃i)(STOCK_ITEM(i) AND i.product_id = p.product_id AND i.qty_on_hand > 0)
+    AND NOT (∃l)(∃s)(SALE_LINE(l) AND SALE(s)
+        AND l.product_id = p.product_id
+        AND l.sale_id = s.sale_id
+        AND s.sale_datetime ≥ '2026-10-14'
+        AND s.sale_datetime < '2026-11-13') }
+```
+
+Each `EXISTS` in the SQL corresponds to an existential quantifier, and `NOT EXISTS` to a negated one.
+
+**Result** (30 days before 2026-11-13):
+
+| product_id | name                          | product_type |
+| ---------: | ----------------------------- | ------------ |
+|          2 | Elden Ring                    | game         |
+|          9 | PlayStation 5                 | console      |
+|         13 | DualSense Wireless Controller | accessory    |
+
+Elden Ring last sold on 2026-10-04 and the PlayStation 5 console on 2026-10-11, and the controller's two sales were on those same dates. With the default 90 days, the window starts on 2026-08-15, before the first sale in the sample data, and every product has sold at least once, so the result is empty.

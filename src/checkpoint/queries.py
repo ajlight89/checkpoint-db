@@ -126,3 +126,36 @@ def members_who_bought_every_type(conn: sqlite3.Connection) -> list[tuple]:
         ORDER BY c.customer_id
     """
     return conn.execute(sql).fetchall()
+
+
+def products_without_recent_sales(
+    conn: sqlite3.Connection, as_of: str, days: int = 90
+) -> list[tuple]:
+    """Return in-stock products with no sale in the ``days`` before ``as_of``.
+
+    ``as_of`` is written as 'YYYY-MM-DD'. The window starts ``days`` days
+    before it and ends just before it. A product is in stock when any of its
+    stock records has units on hand. Each row is (product_id, name,
+    product_type), sorted by product_id.
+    """
+    # EXISTS tests for at least one matching row without joining, so a product
+    # with several stock records still appears once.
+    sql = """
+        SELECT p.product_id, p.name, p.product_type
+        FROM product AS p
+        WHERE EXISTS (
+                SELECT *
+                FROM stock_item AS st
+                WHERE st.product_id = p.product_id AND st.qty_on_hand > 0
+            )
+            AND NOT EXISTS (
+                SELECT *
+                FROM sale_line AS sl
+                JOIN sale AS s ON s.sale_id = sl.sale_id
+                WHERE sl.product_id = p.product_id
+                    AND s.sale_datetime >= date(?, '-' || ? || ' days')
+                    AND s.sale_datetime < ?
+            )
+        ORDER BY p.product_id
+    """
+    return conn.execute(sql, (as_of, days, as_of)).fetchall()

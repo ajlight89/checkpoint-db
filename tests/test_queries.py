@@ -124,3 +124,45 @@ def test_members_who_bought_every_type_after_new_sales(
         (1, "Maya", "Chen"),
         (7, "Hannah", "Kim"),
     ]
+
+
+def test_products_without_recent_sales(demo: sqlite3.Connection) -> None:
+    # The 30 days before 2026-11-13 start on 2026-10-14. Elden Ring, the
+    # PlayStation 5 console, and the controller last sold on 10-04 or 10-11.
+    assert queries.products_without_recent_sales(demo, "2026-11-13", 30) == [
+        (2, "Elden Ring", "game"),
+        (9, "PlayStation 5", "console"),
+        (13, "DualSense Wireless Controller", "accessory"),
+    ]
+
+
+def test_products_without_recent_sales_default_window(
+    demo: sqlite3.Connection,
+) -> None:
+    # The default 90 days reach back to 2026-08-15, before the first sale,
+    # and every product sold at least once.
+    assert queries.products_without_recent_sales(demo, "2026-11-13") == []
+
+
+def test_products_without_recent_sales_needs_stock(demo: sqlite3.Connection) -> None:
+    # The controller still has used stock; the console has none left.
+    demo.executescript("""
+        UPDATE stock_item SET qty_on_hand = 0
+        WHERE product_id = 13 AND condition = 'new';
+        UPDATE stock_item SET qty_on_hand = 0 WHERE product_id = 9;
+    """)
+    assert queries.products_without_recent_sales(demo, "2026-11-13", 30) == [
+        (2, "Elden Ring", "game"),
+        (13, "DualSense Wireless Controller", "accessory"),
+    ]
+
+
+def test_products_without_recent_sales_ignores_later_sales(
+    demo: sqlite3.Connection,
+) -> None:
+    # As of 2026-10-05, Elden Ring sold the day before. Astro Bot's only sale
+    # is on 2026-10-31, after the window, so it counts as not sold.
+    rows = queries.products_without_recent_sales(demo, "2026-10-05", 30)
+    names = [row[1] for row in rows]
+    assert "Elden Ring" not in names
+    assert "Astro Bot" in names
