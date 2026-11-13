@@ -1,10 +1,11 @@
 """Tests for the command-line menus, with scripted answers in place of typing."""
 
 import sqlite3
+from pathlib import Path
 
 import pytest
 
-from checkpoint import cli
+from checkpoint import __main__, cli
 
 
 def run(
@@ -119,3 +120,45 @@ def test_add_customer_then_enroll(
     out = capsys.readouterr().out
     assert "Added customer 13." in out
     assert "Enrolled customer 13 for one year." in out
+
+
+# ----- Manager and analyst -----
+
+
+def test_manager_low_stock(
+    demo: sqlite3.Connection,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    run(monkeypatch, demo, "2", "1", "b", "q")
+    out = capsys.readouterr().out
+    assert "Manager menu" in out
+    assert "Super Mario World" in out
+    assert "Bloodborne" not in out
+
+
+def test_analyst_platform_sales(
+    demo: sqlite3.Connection,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    run(monkeypatch, demo, "3", "2", "2026-10-01", "2026-12-01", "2", "b", "q")
+    out = capsys.readouterr().out
+    assert ["Nintendo", "Switch", "3"] in words(out)
+    assert "PlayStation 4" not in out  # 1 unit, below the minimum of 2
+
+
+def test_first_run_builds_sample_database(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("builtins.input", lambda prompt: "q")
+    __main__.main()
+    __main__.main()
+    out = capsys.readouterr().out
+    assert out.count("Created checkpoint.db") == 1
+    conn = sqlite3.connect(tmp_path / "checkpoint.db")
+    assert count(conn, "customer") == 12
+    conn.close()

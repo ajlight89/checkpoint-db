@@ -7,6 +7,7 @@ refused request comes back here as a StoreError with a message to show.
 
 import sqlite3
 from collections.abc import Callable
+from datetime import date
 
 from checkpoint import queries, services
 from checkpoint.money import format_cents
@@ -35,6 +36,15 @@ def ask_int(prompt: str, optional: bool = False) -> int | None:
         if answer.isdecimal() and int(answer) > 0:
             return int(answer)
         print("Enter a whole number greater than zero.")
+
+
+def ask_date(prompt: str) -> str:
+    """Ask until the answer is a date, and return it as 'YYYY-MM-DD'."""
+    while True:
+        try:
+            return date.fromisoformat(ask(f"{prompt} (YYYY-MM-DD)")).isoformat()
+        except ValueError:
+            print("Enter a date such as 2026-11-01.")
 
 
 def ask_choice(prompt: str, choices: dict[str, str]) -> str:
@@ -163,6 +173,84 @@ def trade(conn: sqlite3.Connection) -> None:
     show(("Trade-in", "Items", "Payout"), rows, money=(2,))
 
 
+# ----- Manager -----
+
+
+def low_stock(conn: sqlite3.Connection) -> None:
+    """List stock at or below its reorder threshold (manager_low_stock view)."""
+    rows = conn.execute(
+        "SELECT product_id, name, condition, qty_on_hand, reorder_threshold "
+        "FROM manager_low_stock ORDER BY product_id, condition"
+    ).fetchall()
+    show(("ID", "Name", "Condition", "Qty", "Reorder at"), rows)
+
+
+def members(conn: sqlite3.Connection) -> None:
+    """List loyalty members and whether each is active today (member_status view)."""
+    rows = conn.execute(
+        "SELECT customer_id, first_name, last_name, join_date, expiry_date, "
+        "CASE WHEN is_active THEN 'yes' ELSE 'no' END "
+        "FROM member_status ORDER BY customer_id"
+    ).fetchall()
+    show(("ID", "First", "Last", "Joined", "Expires", "Active"), rows)
+
+
+def purchases(conn: sqlite3.Connection) -> None:
+    """Count each member's purchases in a period (Q2)."""
+    start, end = ask_date("Start"), ask_date("End (not included)")
+    rows = queries.purchases_per_member(conn, start, end)
+    show(("ID", "First", "Last", "Purchases"), rows)
+
+
+def above_average(conn: sqlite3.Connection) -> None:
+    """List used games priced above the average for their condition (Q4)."""
+    rows = queries.used_games_above_average(conn)
+    show(("Name", "Platform", "Condition", "Price"), rows, money=(3,))
+
+
+def every_type(conn: sqlite3.Connection) -> None:
+    """List members who bought a game, a console, and an accessory (Q5)."""
+    show(("ID", "First", "Last"), queries.members_who_bought_every_type(conn))
+
+
+def stale_stock(conn: sqlite3.Connection) -> None:
+    """List in-stock products with no recent sale (Q6)."""
+    days = ask_int("Days without a sale")
+    rows = queries.products_without_recent_sales(conn, date.today().isoformat(), days)
+    show(("ID", "Name", "Type"), rows)
+
+
+# ----- Analyst -----
+
+
+def sale_lines(conn: sqlite3.Connection) -> None:
+    """List every sale line (analyst_sale_lines view)."""
+    rows = conn.execute(
+        "SELECT sale_id, sale_datetime, name, condition, quantity, "
+        "unit_price_cents, discount_amount_cents, line_total_cents "
+        "FROM analyst_sale_lines ORDER BY sale_id, product_id"
+    ).fetchall()
+    headers = ("Sale", "Date", "Name", "Condition", "Qty", "Price", "Discount", "Total")
+    show(headers, rows, money=(5, 6, 7))
+
+
+def platform_sales(conn: sqlite3.Connection) -> None:
+    """List platforms that sold at least a number of game units in a period (Q3)."""
+    start, end = ask_date("Start"), ask_date("End (not included)")
+    rows = queries.platforms_with_game_sales(conn, start, end, ask_int("Minimum units"))
+    show(("Platform", "Units"), rows)
+
+
+def sale_totals(conn: sqlite3.Connection) -> None:
+    """List every sale with its totals (sale_total view)."""
+    rows = conn.execute(
+        "SELECT sale_id, sale_datetime, payment_method, item_count, "
+        "subtotal_cents, discount_cents, total_cents FROM sale_total ORDER BY sale_id"
+    ).fetchall()
+    headers = ("Sale", "Date", "Payment", "Items", "Subtotal", "Discount", "Total")
+    show(headers, rows, money=(4, 5, 6))
+
+
 # ----- Menus -----
 
 Action = Callable[[sqlite3.Connection], None]
@@ -177,6 +265,19 @@ MENUS: dict[str, dict[str, tuple[str, Action]]] = {
         "5": ("Enroll a loyalty member", enroll_member),
         "6": ("Record a sale", sell),
         "7": ("Record a trade-in", trade),
+    },
+    "manager": {
+        "1": ("Low stock", low_stock),
+        "2": ("Loyalty members", members),
+        "3": ("Purchases per member", purchases),
+        "4": ("Used games above average price", above_average),
+        "5": ("Members who bought every type", every_type),
+        "6": ("Products without recent sales", stale_stock),
+    },
+    "analyst": {
+        "1": ("Sale lines", sale_lines),
+        "2": ("Game units sold by platform", platform_sales),
+        "3": ("Sale totals", sale_totals),
     },
 }
 
