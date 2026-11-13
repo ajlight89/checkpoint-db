@@ -162,3 +162,41 @@ def test_oversell_cancels_the_whole_sale(demo: sqlite3.Connection) -> None:
     assert count(demo, "sale_line") == 22
     assert qty(demo, 15, "new") == 6
     assert qty(demo, 9, "used_complete") == 2
+
+
+# ----- Trade-ins -----
+
+
+def test_record_trade_in_pays_trade_value(demo: sqlite3.Connection) -> None:
+    # Bloodborne used_complete: 4 at the start, 2 traded in, 1 sold, so 5.
+    trade_in_id = services.record_trade_in(
+        demo,
+        4,
+        [(1, "used_complete", 1), (13, "used_loose", 2)],
+        when="2026-11-13 12:00:00",
+    )
+    assert trade_in_id == 9
+    payout = demo.execute(
+        "SELECT payout_cents FROM trade_in_total WHERE trade_in_id = 9"
+    ).fetchone()
+    assert payout == (500 + 2 * 1500,)
+    assert qty(demo, 1, "used_complete") == 6
+
+
+def test_record_trade_in_refuses_new_items(demo: sqlite3.Connection) -> None:
+    with pytest.raises(StoreError, match="not accepted in trade"):
+        services.record_trade_in(demo, 4, [(1, "used_complete", 1), (1, "new", 1)])
+    assert count(demo, "trade_in") == 8
+    assert qty(demo, 1, "used_complete") == 5
+
+
+def test_record_trade_in_refuses_unknown_customer(demo: sqlite3.Connection) -> None:
+    with pytest.raises(StoreError, match="FOREIGN KEY"):
+        services.record_trade_in(demo, 99, [(1, "used_complete", 1)])
+    assert count(demo, "trade_in") == 8
+
+
+def test_record_trade_in_needs_a_line(demo: sqlite3.Connection) -> None:
+    with pytest.raises(StoreError, match="at least one line"):
+        services.record_trade_in(demo, 4, [])
+    assert count(demo, "trade_in") == 8

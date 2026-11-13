@@ -139,3 +139,46 @@ def record_sale(
     except sqlite3.IntegrityError as err:
         raise StoreError(f"Sale not recorded: {err}.") from err
     return sale_id
+
+
+# ----- Trade-ins -----
+
+
+def record_trade_in(
+    conn: sqlite3.Connection,
+    customer_id: int,
+    lines: list[Line],
+    when: str | None = None,
+) -> int:
+    """Record a trade-in and its lines in one transaction and return its id.
+
+    Each line is paid the stock record's trade-in value. New stock has no
+    trade-in value, so new items are refused (BR-25). If any line fails,
+    nothing is recorded.
+    """
+    if not lines:
+        raise StoreError("A trade-in needs at least one line.")  # BR-24
+    value_sql = """
+        SELECT trade_value_cents FROM stock_item
+        WHERE product_id = ? AND condition = ?
+    """
+    try:
+        with db.transaction(conn):
+            cursor = conn.execute(
+                "INSERT INTO trade_in (trade_datetime, customer_id) VALUES (?, ?)",
+                (when or _now(), customer_id),
+            )
+            trade_in_id = cursor.lastrowid
+            for product_id, condition, quantity in lines:
+                row = conn.execute(value_sql, (product_id, condition)).fetchone()
+                if row is None or row[0] is None:
+                    raise StoreError(
+                        f"Product {product_id} ({condition}) is not accepted in trade."
+                    )
+                conn.execute(
+                    "INSERT INTO trade_in_line VALUES (?, ?, ?, ?, ?)",
+                    (trade_in_id, product_id, condition, quantity, row[0]),
+                )
+    except sqlite3.IntegrityError as err:
+        raise StoreError(f"Trade-in not recorded: {err}.") from err
+    return trade_in_id
