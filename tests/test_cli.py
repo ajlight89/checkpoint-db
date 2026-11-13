@@ -21,6 +21,11 @@ def words(out: str) -> list[list[str]]:
     return [line.split() for line in out.splitlines()]
 
 
+def count(conn: sqlite3.Connection, table: str) -> int:
+    """Return the number of rows in ``table`` (a fixed name, never user input)."""
+    return conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+
+
 # ----- Helpers and clerk lookups -----
 
 
@@ -65,3 +70,52 @@ def test_unknown_phone_and_choice(
     out = capsys.readouterr().out
     assert "Unknown choice." in out
     assert "No customer has that phone number." in out
+
+
+# ----- Clerk recording -----
+
+
+def test_sale_prints_member_total(
+    demo: sqlite3.Connection,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Two HDMI cables (2 x $12.99) for active member 1: 10% off is $2.60.
+    run(monkeypatch, demo, "1", "6", "15", "1", "2", "", "1", "2", "b", "q")
+    assert ["13", "2", "$25.98", "$2.60", "$23.38"] in words(capsys.readouterr().out)
+    assert count(demo, "sale") == 13
+
+
+def test_oversell_prints_error_and_returns_to_menu(
+    demo: sqlite3.Connection,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Only 1 Xbox Series X is on hand after the sample sales.
+    run(monkeypatch, demo, "1", "6", "11", "1", "2", "", "", "1", "b", "q")
+    out = capsys.readouterr().out
+    assert "Sale not recorded: CHECK constraint failed" in out
+    assert out.count("Clerk menu") == 2
+    assert count(demo, "sale") == 12
+
+
+def test_trade_in_prints_payout(
+    demo: sqlite3.Connection,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    run(monkeypatch, demo, "1", "7", "4", "8", "3", "2", "", "b", "q")
+    # Two loose copies of Super Mario 64 at $18.00 each.
+    assert ["9", "2", "$36.00"] in words(capsys.readouterr().out)
+
+
+def test_add_customer_then_enroll(
+    demo: sqlite3.Connection,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    answers = ("1", "4", "Owen", "Park", "5095550123", "5", "13", "", "b", "q")
+    run(monkeypatch, demo, *answers)
+    out = capsys.readouterr().out
+    assert "Added customer 13." in out
+    assert "Enrolled customer 13 for one year." in out

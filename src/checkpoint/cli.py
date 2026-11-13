@@ -10,7 +10,10 @@ from collections.abc import Callable
 
 from checkpoint import queries, services
 from checkpoint.money import format_cents
-from checkpoint.services import StoreError
+from checkpoint.services import Line, StoreError
+
+CONDITIONS = {"1": "new", "2": "used_complete", "3": "used_loose"}
+PAYMENTS = {"1": "cash", "2": "card"}
 
 # ----- Input helpers -----
 
@@ -42,6 +45,17 @@ def ask_choice(prompt: str, choices: dict[str, str]) -> str:
         if answer in choices:
             return choices[answer]
         print("Choose one of the listed options.")
+
+
+def ask_lines() -> list[Line]:
+    """Ask for (product, condition, quantity) lines until the product is blank."""
+    lines = []
+    while True:
+        product_id = ask_int("Product id (blank to finish)", optional=True)
+        if product_id is None:
+            return lines
+        condition = ask_choice("Condition", CONDITIONS)
+        lines.append((product_id, condition, ask_int("Quantity")))
 
 
 # ----- Output helpers -----
@@ -108,6 +122,47 @@ def lookup_customer(conn: sqlite3.Connection) -> None:
         show(("ID", "First", "Last", "Phone", "Joined", "Expires"), [row])
 
 
+def new_customer(conn: sqlite3.Connection) -> None:
+    """Add a customer and print the new customer id."""
+    customer_id = services.add_customer(
+        conn, ask("First name"), ask("Last name"), ask("Phone (10 digits)")
+    )
+    print(f"Added customer {customer_id}.")
+
+
+def enroll_member(conn: sqlite3.Connection) -> None:
+    """Enroll an existing customer in the loyalty program for one year."""
+    customer_id = ask_int("Customer id")
+    services.add_member(conn, customer_id, email=ask("Email (optional)") or None)
+    print(f"Enrolled customer {customer_id} for one year.")
+
+
+def sell(conn: sqlite3.Connection) -> None:
+    """Record a sale and print its total (sale_total view)."""
+    lines = ask_lines()
+    member_id = ask_int("Member customer id (blank if none)", optional=True)
+    payment = ask_choice("Payment", PAYMENTS)
+    sale_id = services.record_sale(conn, lines, payment, member_id)
+    rows = conn.execute(
+        "SELECT sale_id, item_count, subtotal_cents, discount_cents, total_cents "
+        "FROM sale_total WHERE sale_id = ?",
+        (sale_id,),
+    ).fetchall()
+    show(("Sale", "Items", "Subtotal", "Discount", "Total"), rows, money=(2, 3, 4))
+
+
+def trade(conn: sqlite3.Connection) -> None:
+    """Record a trade-in and print the payout (trade_in_total view)."""
+    customer_id = ask_int("Customer id")
+    trade_in_id = services.record_trade_in(conn, customer_id, ask_lines())
+    rows = conn.execute(
+        "SELECT trade_in_id, item_count, payout_cents FROM trade_in_total "
+        "WHERE trade_in_id = ?",
+        (trade_in_id,),
+    ).fetchall()
+    show(("Trade-in", "Items", "Payout"), rows, money=(2,))
+
+
 # ----- Menus -----
 
 Action = Callable[[sqlite3.Connection], None]
@@ -118,6 +173,10 @@ MENUS: dict[str, dict[str, tuple[str, Action]]] = {
         "1": ("Stock list", stock),
         "2": ("Games in stock for a platform", games_on_platform),
         "3": ("Look up a customer", lookup_customer),
+        "4": ("Add a customer", new_customer),
+        "5": ("Enroll a loyalty member", enroll_member),
+        "6": ("Record a sale", sell),
+        "7": ("Record a trade-in", trade),
     },
 }
 
