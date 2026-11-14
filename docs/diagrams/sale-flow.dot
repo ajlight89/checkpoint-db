@@ -9,7 +9,7 @@ digraph sale_flow {
            fontsize=11, margin="0.18,0.08", width=3.2];
     edge  [fontname="Helvetica", fontsize=10, color="#333333", arrowsize=0.8];
 
-    start    [label="Clerk enters the items, the payment\nmethod, and the member's phone (if any)",
+    start    [label="Clerk enters the items, the member's\ncustomer id (if any), and the payment method",
               fillcolor="#e8e8e8"];
     discount [label="Python: if the member is active,\n10% off each line (whole cents)",
               fillcolor="#e8e8e8"];

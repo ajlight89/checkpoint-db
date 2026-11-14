@@ -131,7 +131,7 @@ A rule is enforced in the strongest place that can hold it: a key or NOT NULL, t
 | BR-01 every product is exactly one kind          | CHECK on product_type; a trigger checks that the subclass row matches product_type                 |
 | BR-03 platform names are unique                  | UNIQUE (platform_name)                                                                             |
 | BR-04 a game runs on one platform                | game.platform_id NOT NULL, foreign key                                                             |
-| BR-05 ESRB rating                                | CHECK on allowed values; the pre-1994 exception is checked by the application                      |
+| BR-05 ESRB rating                                | CHECK on allowed values; the pre-1994 exception is left to data entry                              |
 | BR-07 one console product per model              | UNIQUE (model_number)                                                                              |
 | BR-09 one stock record per product and condition | Primary key (product_id, condition)                                                                |
 | BR-11 trade-in value only for used stock         | CHECK: condition is new exactly when trade_value_cents is NULL                                     |
